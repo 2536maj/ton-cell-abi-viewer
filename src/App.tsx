@@ -49,6 +49,16 @@ const sanitizeObject = (obj: any) => {
 
 function parseCell(cell: Cell, tlb?: string) {
   let parsed: any
+
+  try {
+    parsed = parseRuntimeTlb(cell, tlb ?? '')
+    if (parsed) {
+      return parsed
+    }
+  } catch (e) {
+    console.error(e)
+  }
+
   try {
     parsed = parseWithPayloads(cell.beginParse())
     if (parsed) {
@@ -82,15 +92,6 @@ function parseCell(cell: Cell, tlb?: string) {
 
   try {
     parsed = parseUsingBlockTypes(cell)
-    if (parsed) {
-      return parsed
-    }
-  } catch (e) {
-    console.error(e)
-  }
-
-  try {
-    parsed = parseRuntimeTlb(cell, tlb ?? '')
     if (parsed) {
       return parsed
     }
