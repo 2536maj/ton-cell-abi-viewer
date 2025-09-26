@@ -8,6 +8,7 @@ import { stringify } from 'yaml'
 import { parseUsingBlockTypes } from './BlockParser'
 import { ExampleCell } from './Example'
 import { decompileAll, AssemblerWriter } from '@scaleton/tvm-disassembler';
+import { parseTLB } from '@ton-community/tlb-runtime'
 
 type OutputFormat = 'yaml' | 'json' | 'plain' | 'code'
 
@@ -46,12 +47,12 @@ const sanitizeObject = (obj: any) => {
 }
 
 
-function parseCell(cell: Cell) {
+function parseCell(cell: Cell, tlb?: string) {
   let parsed: any
   try {
     parsed = parseWithPayloads(cell.beginParse())
     if (parsed) {
-      console.log('parsed',parsed)
+      console.log('parsed', parsed)
       if (parsed?.data?.kind === 'TextComment') {
         // text parser
         try {
@@ -88,13 +89,33 @@ function parseCell(cell: Cell) {
     console.error(e)
   }
 
-
-
+  try {
+    parsed = parseRuntimeTlb(cell, tlb ?? '')
+    if (parsed) {
+      return parsed
+    }
+  } catch (e) {
+    console.error(e)
+  }
 
   return undefined
 }
 
-export function replaceCellPayload<T>(obj: T): {
+function parseRuntimeTlb(cell: Cell, tlb: string) {
+  try {
+    const runtime = parseTLB(tlb)
+    const unpack = runtime.deserialize(cell)
+    if (unpack.success) {
+      return unpack
+    }
+  } catch (e) {
+    //
+  }
+
+  return undefined
+}
+
+export function replaceCellPayload<T>(obj: T, tlb?: string): {
   data: T
   hasChanges: boolean
 } {
@@ -119,7 +140,7 @@ export function replaceCellPayload<T>(obj: T): {
   // Direct JettonPayload case
   if (obj instanceof Cell) {
     try {
-      const parsedCell = parseCell(obj)
+      const parsedCell = parseCell(obj, tlb)
       if (parsedCell) {
         return {
           data: {
@@ -145,7 +166,7 @@ export function replaceCellPayload<T>(obj: T): {
 
   // Array case
   if (Array.isArray(obj)) {
-    const replaced = obj.map(item => replaceCellPayload(item))
+    const replaced = obj.map(item => replaceCellPayload(item, tlb))
     const hasChanges = replaced.some(item => item.hasChanges)
     return {
       data: hasChanges
@@ -161,7 +182,7 @@ export function replaceCellPayload<T>(obj: T): {
 
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      const { data, hasChanges: hasChangesInner } = replaceCellPayload((obj as any)[key]);
+      const { data, hasChanges: hasChangesInner } = replaceCellPayload((obj as any)[key], tlb);
       if (hasChangesInner) {
         hasChanges = true;
         result[key] = data;
@@ -182,6 +203,7 @@ function App() {
   const [error, setError] = createSignal('')
   const [isLoading, setIsLoading] = createSignal(false)
   const [format, setFormat] = createSignal<OutputFormat>('yaml')
+  const [tlb, setTlb] = createSignal('')
 
   const formatOutput = (data: any) => {
     if (format() === 'json') {
@@ -250,9 +272,9 @@ function App() {
         }
       }
 
-      let parsed = parseCell(cell)
+      let parsed = parseCell(cell, tlb())
       while (true) {
-        const { data, hasChanges } = replaceCellPayload(parsed)
+        const { data, hasChanges } = replaceCellPayload(parsed, tlb())
         parsed = data
         if (!hasChanges) {
           break
@@ -340,6 +362,17 @@ function App() {
                 Clear
               </button>
             </div> */}
+          </div>
+
+          <div class="input-group flex flex-col">
+            <div>Custom TLB:</div>
+            <textarea
+              value={tlb()}
+              onInput={(e) => setTlb(e.currentTarget.value)}
+              placeholder="Paste your TLB here..."
+              rows="5"
+              class='flex'
+            />
           </div>
 
           <div class="example-cell-button-container">

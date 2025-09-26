@@ -369,6 +369,14 @@ footer {
   gap: 8px;
 }
 
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 1rem;
